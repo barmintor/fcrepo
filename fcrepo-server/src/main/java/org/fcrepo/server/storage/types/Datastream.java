@@ -6,20 +6,20 @@ package org.fcrepo.server.storage.types;
 
 import java.io.IOException;
 import java.io.InputStream;
-
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-
 import java.util.Date;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import org.fcrepo.common.Constants;
 import org.fcrepo.server.Context;
+import org.fcrepo.server.MultiValueMap;
 import org.fcrepo.server.ReadOnlyContext;
 import org.fcrepo.server.errors.GeneralException;
 import org.fcrepo.server.errors.StreamIOException;
 import org.fcrepo.server.utilities.StringUtility;
+import org.fcrepo.utilities.DateUtility;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
@@ -37,13 +37,13 @@ public class Datastream {
     public final static String CHECKSUM_NONE = "none";
 
     public final static String CHECKSUM_IOEXCEPTION = "ExceptionReadingStream";
-    
+
     public static final String DS_LOCATION_TYPE_INTERNAL = "INTERNAL_ID";
 
     public static final String DS_LOCATION_TYPE_URL = "URL";
 
     public boolean isNew = false;
-    
+
     public String DatastreamID;
 
     public String[] DatastreamAltIDs = new String[0];
@@ -129,7 +129,23 @@ public class Datastream {
     }
 
     public InputStream getContentStreamForChecksum() throws StreamIOException {
-        return getContentStream();
+        /**
+         * What should the context be here?
+         */
+        MultiValueMap environmentAttributes = beginEnvironmentMap("");
+        try {
+            environmentAttributes.set(Constants.HTTP_REQUEST.CLIENT_IP_ADDRESS.uri, "127.0.0.1");
+        } catch (Exception e) {
+            logger.warn("Could not set client IP for checksum context!");
+        }
+        ReadOnlyContext context;
+        try {
+            context = ReadOnlyContext.getContext(null, null, "fcrepo-checksum", false);
+        } catch (Exception e) {
+            throw new StreamIOException(e.getMessage(),e);
+        }
+        context.setEnvironmentValues(environmentAttributes);
+        return getContentStream(context);
     }
 
     public static String getDefaultChecksumType() {
@@ -310,5 +326,24 @@ public class Datastream {
         target.DSChecksumType = DSChecksumType;
         target.DSChecksum = DSChecksum;
     }
+
+    private static final MultiValueMap beginEnvironmentMap(String messageProtocol) {
+        MultiValueMap environmentMap = new MultiValueMap();
+        try {
+        environmentMap.set(Constants.HTTP_REQUEST.MESSAGE_PROTOCOL.uri,
+                           messageProtocol);
+        Date now = new Date();
+        environmentMap.set(Constants.ENVIRONMENT.CURRENT_DATE_TIME.uri,
+                           DateUtility.convertDateToString(now));
+        environmentMap.set(Constants.ENVIRONMENT.CURRENT_DATE.uri, DateUtility
+                .convertDateToDateString(now));
+        environmentMap.set(Constants.ENVIRONMENT.CURRENT_TIME.uri, DateUtility
+                .convertDateToTimeString(now));
+        } catch (Exception e) {
+            logger.warn("Datastream could not set envAttributes for checksum context");
+        }
+        return environmentMap;
+    }
+
 
 }

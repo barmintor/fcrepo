@@ -455,6 +455,18 @@
 
   <repositories>
     <repository>
+      <id>duraspace-thirdparty</id>
+      <name>Duraspace Thirdparty Maven Repository</name>
+      <url>https://m2.duraspace.org/content/repositories/thirdparty</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
+    
+    <repository>
       <id>central</id>
       <name>Central Maven Repository</name>
       <url>http://repo1.maven.org/maven2</url>
@@ -467,18 +479,6 @@
       <id>duraspace-releases</id>
       <name>DuraSpace Releases Maven Repository</name>
       <url>https://m2.duraspace.org/content/repositories/releases</url>
-      <releases>
-        <enabled>true</enabled>
-      </releases>
-      <snapshots>
-        <enabled>false</enabled>
-      </snapshots>
-    </repository>
-
-    <repository>
-      <id>duraspace-thirdparty</id>
-      <name>Duraspace Thirdparty Maven Repository</name>
-      <url>https://m2.duraspace.org/content/repositories/thirdparty</url>
       <releases>
         <enabled>true</enabled>
       </releases>

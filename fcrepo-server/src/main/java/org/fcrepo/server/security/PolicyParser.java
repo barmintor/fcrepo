@@ -4,7 +4,6 @@
  */
 package org.fcrepo.server.security;
 
-import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,21 +18,18 @@ import javax.xml.validation.Schema;
 import javax.xml.validation.SchemaFactory;
 import javax.xml.validation.Validator;
 
-import com.sun.xacml.AbstractPolicy;
-import com.sun.xacml.ParsingException;
-import com.sun.xacml.Policy;
-import com.sun.xacml.PolicySet;
-
+import org.fcrepo.common.FaultException;
+import org.fcrepo.server.errors.ValidationException;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
-
 import org.xml.sax.ErrorHandler;
 import org.xml.sax.SAXException;
 import org.xml.sax.SAXParseException;
 
-import org.fcrepo.common.FaultException;
-import org.fcrepo.server.errors.ValidationException;
-import org.fcrepo.server.utilities.StreamUtility;
+import com.sun.xacml.AbstractPolicy;
+import com.sun.xacml.ParsingException;
+import com.sun.xacml.Policy;
+import com.sun.xacml.PolicySet;
 
 
 
@@ -46,8 +42,9 @@ import org.fcrepo.server.utilities.StreamUtility;
  * Use the <code>copy()</code> method to support concurrent parsing.
  */
 public class PolicyParser {
+    private static final SchemaFactory FACTORY = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
 
-    private final byte[] m_schemaBytes;
+    private final Schema m_schema;
 
     private final Validator m_validator;
 
@@ -62,14 +59,14 @@ public class PolicyParser {
      */
     public PolicyParser(InputStream schemaStream)
             throws IOException, SAXException {
-        this(StreamUtility.getBytes(schemaStream));
+        this(FACTORY.newSchema(new StreamSource(schemaStream)));
     }
 
     // actual constructor keeps schema bytes to enable cheap copying
-    private PolicyParser(byte[] schemaBytes)
+    private PolicyParser(Schema schema)
             throws SAXException {
-        m_schemaBytes = schemaBytes;
-        m_validator = createXSDValidator(new ByteArrayInputStream(m_schemaBytes));
+        m_schema = schema;
+        m_validator = schema.newValidator();
         m_domParser = createDOMParser();
     }
 
@@ -80,7 +77,7 @@ public class PolicyParser {
      */
     public PolicyParser copy() {
         try {
-            return new PolicyParser(m_schemaBytes);
+            return new PolicyParser(m_schema);
         } catch (SAXException wontHappen) {
             throw new FaultException(wontHappen);
         }
@@ -156,14 +153,6 @@ public class PolicyParser {
         }
     }
 
-    private static Validator createXSDValidator(InputStream schemaStream)
-            throws SAXException {
-        if (schemaStream == null) return null;
-        SchemaFactory factory = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
-        Schema schema = factory.newSchema(new StreamSource(schemaStream));
-        return schema.newValidator();
-    }
-
     /**
      * Command-line utility for validating XACML policies.
      * <p>
@@ -224,8 +213,11 @@ public class PolicyParser {
  *
  */
     public static class ThrowAllErrorHandler implements ErrorHandler {
+        @Override
         public void error(SAXParseException e) throws SAXParseException { throw e; }
+        @Override
         public void fatalError(SAXParseException e) throws SAXParseException { throw e; }
+        @Override
         public void warning(SAXParseException e) throws SAXParseException { throw e; }
     }
 }

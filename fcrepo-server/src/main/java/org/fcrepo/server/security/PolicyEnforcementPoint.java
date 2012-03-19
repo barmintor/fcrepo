@@ -6,12 +6,22 @@ package org.fcrepo.server.security;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+
+import org.fcrepo.common.Constants;
+import org.fcrepo.server.Context;
+import org.fcrepo.server.errors.authorization.AuthzDeniedException;
+import org.fcrepo.server.errors.authorization.AuthzException;
+import org.fcrepo.server.errors.authorization.AuthzOperationalException;
+import org.fcrepo.server.errors.authorization.AuthzPermittedException;
+import org.fcrepo.server.security.impl.AccumulatingPolicyStrategy;
+import org.fcrepo.server.storage.DOManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.sun.xacml.PDP;
 import com.sun.xacml.PDPConfig;
@@ -23,16 +33,6 @@ import com.sun.xacml.ctx.Result;
 import com.sun.xacml.ctx.Subject;
 import com.sun.xacml.finder.AttributeFinder;
 import com.sun.xacml.finder.PolicyFinder;
-
-import org.fcrepo.common.Constants;
-import org.fcrepo.server.Context;
-import org.fcrepo.server.errors.authorization.AuthzDeniedException;
-import org.fcrepo.server.errors.authorization.AuthzException;
-import org.fcrepo.server.errors.authorization.AuthzOperationalException;
-import org.fcrepo.server.errors.authorization.AuthzPermittedException;
-import org.fcrepo.server.storage.DOManager;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * @author Bill Niebel
@@ -156,18 +156,19 @@ public class PolicyEnforcementPoint {
 
         PolicyFinder policyFinder = new PolicyFinder();
 
-        Set<PolicyFinderModule> policyModules =
-                new HashSet<PolicyFinderModule>();
+        Set<com.sun.xacml.finder.PolicyFinderModule> policyModules =
+                new HashSet<com.sun.xacml.finder.PolicyFinderModule>();
         PolicyFinderModule combinedPolicyModule = null;
         combinedPolicyModule =
                 new PolicyFinderModule(combiningAlgorithm,
                                        globalPolicyConfig,
                                        globalBackendPolicyConfig,
                                        globalPolicyGuiToolConfig,
-                                       manager,
                                        validateRepositoryPolicies,
                                        validateObjectPoliciesFromDatastream,
-                                       policyParser);
+                                       policyParser,
+                                       policyStrategy);
+
         logger.debug("after constucting fedora policy finder module");
         logger.debug("before adding fedora policy finder module to policy finder hashset");
         policyModules.add(combinedPolicyModule);
@@ -201,6 +202,8 @@ public class PolicyEnforcementPoint {
 
     String ownerIdSeparator = ",";
 
+    PolicyStrategy policyStrategy;
+
     public void initPep(String enforceMode,
                         String combiningAlgorithm,
                         String globalPolicyConfig,
@@ -230,6 +233,9 @@ public class PolicyEnforcementPoint {
         this.validateObjectPoliciesFromDatastream =
                 validateObjectPoliciesFromDatastream;
         this.ownerIdSeparator = ownerIdSeparator;
+        if (this.policyStrategy == null){
+            this.policyStrategy = new AccumulatingPolicyStrategy(manager);
+        }
         newPdp();
     }
 
@@ -239,6 +245,10 @@ public class PolicyEnforcementPoint {
 
     public void destroy() {
         pdp = null;
+    }
+
+    public void setPolicyStrategy(PolicyStrategy policyStrategy) {
+        this.policyStrategy = policyStrategy;
     }
 
     private final Set wrapSubjects(String subjectLoginId) {

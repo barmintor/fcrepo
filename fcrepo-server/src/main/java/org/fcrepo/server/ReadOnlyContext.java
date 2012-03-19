@@ -13,7 +13,6 @@ import javax.servlet.http.HttpServletRequest;
 
 import org.apache.axis.MessageContext;
 import org.apache.axis.transport.http.HTTPConstants;
-
 import org.fcrepo.common.Constants;
 import org.fcrepo.server.security.servletfilters.ExtendedHttpServletRequest;
 import org.fcrepo.utilities.DateUtility;
@@ -45,6 +44,7 @@ public class ReadOnlyContext
 
     private MultiValueMap m_environmentAttributes;
 
+    @Override
     public final MultiValueMap getEnvironmentAttributes() {
         return m_environmentAttributes;
     }
@@ -108,26 +108,40 @@ public class ReadOnlyContext
         }
     }
 
+    @Override
     public Iterator environmentAttributes() {
         return m_environmentAttributes.names();
     }
 
+    @Override
     public int nEnvironmentValues(String name) {
         return m_environmentAttributes.length(name);
     }
 
+    @Override
     public String getEnvironmentValue(String name) {
         return m_environmentAttributes.getString(name);
     }
 
+    @Override
     public String[] getEnvironmentValues(String name) {
         return m_environmentAttributes.getStringArray(name);
     }
 
+    public void setEnvironmentValues(MultiValueMap environmentAttributes) {
+        m_environmentAttributes = environmentAttributes;
+        if (m_environmentAttributes == null) {
+            m_environmentAttributes = new MultiValueMap();
+        }
+        m_environmentAttributes.lock();
+    }
+
+    @Override
     public Iterator subjectAttributes() {
         return m_subjectAttributes.names();
     }
 
+    @Override
     public int nSubjectValues(String name) {
         int n = m_subjectAttributes.length(name);
         logger.debug("N SUBJECT VALUES without == " + n);
@@ -139,6 +153,7 @@ public class ReadOnlyContext
         return n;
     }
 
+    @Override
     public String getSubjectValue(String name) {
         String value = null;
         if (m_subjectAttributes.length(name) == 1) {
@@ -152,6 +167,7 @@ public class ReadOnlyContext
         return value;
     }
 
+    @Override
     public String[] getSubjectValues(String name) {
         int n = m_subjectAttributes.length(name);
         if (extendedHttpServletRequest != null
@@ -181,6 +197,7 @@ public class ReadOnlyContext
         return values;
     }
 
+    @Override
     public void setActionAttributes(MultiValueMap actionAttributes) {
         m_actionAttributes = actionAttributes;
         if (m_actionAttributes == null) {
@@ -189,26 +206,32 @@ public class ReadOnlyContext
         m_actionAttributes.lock();
     }
 
+    @Override
     public Iterator actionAttributes() {
         return m_actionAttributes.names();
     }
 
+    @Override
     public int nActionValues(String name) {
         return m_actionAttributes.length(name);
     }
 
+    @Override
     public String getActionValue(String name) {
         return m_actionAttributes.getString(name);
     }
 
+    @Override
     public String[] getActionValues(String name) {
         return m_actionAttributes.getStringArray(name);
     }
 
+    @Override
     public Iterator resourceAttributes() {
         return m_resourceAttributes.names();
     }
 
+    @Override
     public void setResourceAttributes(MultiValueMap resourceAttributes) {
         m_resourceAttributes = resourceAttributes;
         if (m_resourceAttributes == null) {
@@ -217,14 +240,17 @@ public class ReadOnlyContext
         m_resourceAttributes.lock();
     }
 
+    @Override
     public int nResourceValues(String name) {
         return m_resourceAttributes.length(name);
     }
 
+    @Override
     public String getResourceValue(String name) {
         return m_resourceAttributes.getString(name);
     }
 
+    @Override
     public String[] getResourceValues(String name) {
         return m_resourceAttributes.getStringArray(name);
     }
@@ -241,6 +267,7 @@ public class ReadOnlyContext
         return buffer.toString();
     }
 
+    @Override
     public Date now() {
         return now;
     }
@@ -525,10 +552,12 @@ public class ReadOnlyContext
         auxSubjectRoles, noOp);
     }
 
+    @Override
     public String getPassword() {
         return password;
     }
 
+    @Override
     public boolean getNoOp() {
         return noOp;
     }

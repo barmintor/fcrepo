@@ -8,12 +8,19 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-
 import java.net.URI;
 import java.net.URISyntaxException;
-
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+
+import org.fcrepo.common.Constants;
+import org.fcrepo.common.FaultException;
+import org.fcrepo.server.errors.GeneralException;
+import org.fcrepo.server.errors.ValidationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.sun.xacml.AbstractPolicy;
 import com.sun.xacml.EvaluationCtx;
@@ -26,20 +33,6 @@ import com.sun.xacml.cond.EvaluationResult;
 import com.sun.xacml.ctx.Status;
 import com.sun.xacml.finder.PolicyFinder;
 import com.sun.xacml.finder.PolicyFinderResult;
-
-import org.fcrepo.common.Constants;
-import org.fcrepo.common.FaultException;
-import org.fcrepo.server.ReadOnlyContext;
-import org.fcrepo.server.Server;
-import org.fcrepo.server.errors.GeneralException;
-import org.fcrepo.server.errors.ObjectNotInLowlevelStorageException;
-import org.fcrepo.server.errors.ServerException;
-import org.fcrepo.server.errors.ValidationException;
-import org.fcrepo.server.storage.DOReader;
-import org.fcrepo.server.storage.RepositoryReader;
-import org.fcrepo.server.storage.types.Datastream;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * XACML PolicyFinder for Fedora.
@@ -61,7 +54,7 @@ public class PolicyFinderModule
 
     private final String m_combiningAlgorithm;
 
-    private final RepositoryReader m_repoReader;
+//    private final RepositoryReader m_repoReader;
 
     private final boolean m_validateRepositoryPolicies;
 
@@ -69,35 +62,37 @@ public class PolicyFinderModule
 
     private final PolicyParser m_policyParser;
 
-    private final List<AbstractPolicy> m_repositoryPolicies;
+    private final PolicyStrategy m_policyStrategy;
+
+    private final Collection<AbstractPolicy> m_repositoryPolicies;
 
     public PolicyFinderModule(String combiningAlgorithm,
                               String repositoryPolicyDirectoryPath,
                               String repositoryBackendPolicyDirectoryPath,
                               String repositoryPolicyGuiToolDirectoryPath,
-                              RepositoryReader repoReader,
                               boolean validateRepositoryPolicies,
                               boolean validateObjectPoliciesFromDatastream,
-                              PolicyParser policyParser)
+                              PolicyParser policyParser,
+                              PolicyStrategy policyStrategy)
             throws GeneralException {
 
         m_combiningAlgorithm = combiningAlgorithm;
-        m_repoReader = repoReader;
+//        m_repoReader = repoReader;
         m_validateRepositoryPolicies = validateRepositoryPolicies;
         m_validateObjectPoliciesFromDatastream = validateObjectPoliciesFromDatastream;
         m_policyParser = policyParser;
-
+        m_policyStrategy = policyStrategy;
         logger.info("Loading repository policies...");
-        m_repositoryPolicies = new ArrayList<AbstractPolicy>();
         try {
-            m_repositoryPolicies.addAll(
-                    loadPolicies(m_policyParser,
+            Map<String,AbstractPolicy> repositoryPolicies =
+                    m_policyStrategy.loadPolicies(m_policyParser,
+                    m_validateRepositoryPolicies,
+                    new File(repositoryBackendPolicyDirectoryPath));
+            repositoryPolicies.putAll(
+                    m_policyStrategy.loadPolicies(m_policyParser,
                                  m_validateRepositoryPolicies,
                                  new File(repositoryPolicyDirectoryPath)));
-            m_repositoryPolicies.addAll(
-                    loadPolicies(m_policyParser,
-                                 m_validateRepositoryPolicies,
-                                 new File(repositoryBackendPolicyDirectoryPath)));
+            m_repositoryPolicies = repositoryPolicies.values();
         } catch (Exception e) {
             throw new GeneralException("Error loading repository policies", e);
         }
@@ -130,7 +125,7 @@ public class PolicyFinderModule
             List<AbstractPolicy> policies = new ArrayList<AbstractPolicy>(m_repositoryPolicies);
             String pid = getPid(context);
             if (pid != null && !"".equals(pid)) {
-                AbstractPolicy objectPolicyFromObject = loadObjectPolicy(pid);
+                AbstractPolicy objectPolicyFromObject = m_policyStrategy.loadObjectPolicy(m_policyParser.copy(), pid, m_validateObjectPoliciesFromDatastream);
                 if (objectPolicyFromObject != null) {
                     policies.add(objectPolicyFromObject);
                 }
@@ -154,26 +149,6 @@ public class PolicyFinderModule
                             .getMessage()));
         }
         return policyFinderResult;
-    }
-
-    // if the object exists and has a POLICY datastream, parse and return it
-    private AbstractPolicy loadObjectPolicy(String pid) throws ServerException {
-        try {
-            DOReader reader = m_repoReader.getReader(Server.USE_DEFINITIVE_STORE,
-                                                     ReadOnlyContext.EMPTY,
-                                                     pid);
-            Datastream ds = reader.GetDatastream("POLICY", null);
-            if (ds != null) {
-                logger.debug("Using POLICY for " + pid);
-                return m_policyParser //TODO performance hole. Each copy() performs schema parsing, which is expensive
-                        .copy().parse(ds.getContentStream(),
-                                      m_validateObjectPoliciesFromDatastream);
-            } else {
-                return null;
-            }
-        } catch (ObjectNotInLowlevelStorageException e) {
-            return null;
-        }
     }
 
     // get the pid from the context, or null if unable
