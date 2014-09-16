@@ -84,7 +84,7 @@ public class MessagingModule
             String fedoraBaseUrl = ServerUtility.getBaseURL("http");
             msg =
                     new MessagingImpl(fedoraBaseUrl,
-                                      createDestinations(),
+                                      createDestinations(getDatastores(), jmsMgr),
                                       jmsMgr);
         } catch (Exception e) {
             throw new ModuleInitializationException("Error connecting to JMS ",
@@ -164,72 +164,59 @@ public class MessagingModule
      * @return a <code>Map</code>ping of message type to destinations
      * @throws ModuleInitializationException
      */
-    private Map<String, List<String>> createDestinations()
+    private static Map<String, List<String>> createDestinations(List<DatastoreConfig> dsConfigs, JMSManager jmsMgr)
             throws ModuleInitializationException {
         Map<String, List<String>> mdMap = new HashMap<String, List<String>>();
         for (MessageType type : MessageType.values()) {
             mdMap.put(type.toString(), new ArrayList<String>());
         }
 
-        Iterator<String> parameters = parameterNames();
-        String param;
-        while (parameters.hasNext()) {
-            param = parameters.next();
-            if (param.startsWith("datastore")) {
-                DatastoreConfig dsConfig = getDatastore(param);
-                String[] msgTypes =
-                        dsConfig.getParameter("messageTypes").split(" ");
-                for (String msgType : msgTypes) {
-                    if (!mdMap.containsKey(msgType)) {
-                        throw new ModuleInitializationException(msgType
-                                + " is not a supported MessageType.", getRole());
-                    }
-                }
+        for (DatastoreConfig dsConfig: dsConfigs) {
 
-                String destName = dsConfig.getParameter("name");
-                String type = dsConfig.getParameter("type");
-                boolean transacted =
-                        Boolean.parseBoolean(dsConfig
-                                .getParameter("transacted"));
-                String ackMode = dsConfig.getParameter("ackMode");
+            String destName = dsConfig.getParameter("name");
+            String type = dsConfig.getParameter("type");
+            boolean transacted =
+                    Boolean.parseBoolean(dsConfig
+                            .getParameter("transacted"));
+            String ackMode = dsConfig.getParameter("ackMode");
 
-                DestinationType destType = DestinationType.Topic;
-                if (type.equalsIgnoreCase("queue")) {
-                    destType = DestinationType.Queue;
-                }
+            DestinationType destType = DestinationType.Topic;
+            if (type.equalsIgnoreCase("queue")) {
+                destType = DestinationType.Queue;
+            }
 
-                int destAckMode = Session.AUTO_ACKNOWLEDGE;
+            int destAckMode = Session.AUTO_ACKNOWLEDGE;
 
-                if (ackMode != null && ackMode.length() > 0) {
-                    try {
-                        destAckMode = Integer.parseInt(ackMode);
-                    } catch (NumberFormatException e) {
-                        throw new ModuleInitializationException("ackMode must be a number",
-                                                                getRole());
-                    }
-                }
-
+            if (ackMode != null && ackMode.length() > 0) {
                 try {
-                    if (logger.isDebugEnabled()) {
-                        logger.debug(String
-                                .format("createDestination(%s, %s, %s, %s)",
-                                        destName,
-                                        destType,
-                                        transacted,
-                                        destAckMode));
-                    }
-                    jmsMgr.createDestination(destName,
-                                             destType,
-                                             transacted,
-                                             destAckMode);
-                } catch (Exception e) {
-                    throw new ModuleInitializationException(e.getMessage(),
-                                                            getRole());
+                    destAckMode = Integer.parseInt(ackMode);
+                } catch (NumberFormatException e) {
+                    throw new ModuleInitializationException("ackMode must be a number",
+                            Messaging.class.getName());
                 }
+            }
 
-                for (String msgType : msgTypes) {
-                    mdMap.get(msgType).add(destName);
+            try {
+                if (logger.isDebugEnabled()) {
+                    logger.debug(String
+                            .format("createDestination(%s, %s, %s, %s)",
+                                    destName,
+                                    destType,
+                                    transacted,
+                                    destAckMode));
                 }
+                jmsMgr.createDestination(destName,
+                        destType,
+                        transacted,
+                        destAckMode);
+            } catch (Exception e) {
+                throw new ModuleInitializationException(e.getMessage(),
+                        Messaging.class.getName());
+            }
+
+            String[] msgTypes = dsConfig.getParameter("messageTypes").split(" ");
+            for (String msgType : msgTypes) {
+                mdMap.get(msgType).add(destName);
             }
         }
         return mdMap;
@@ -248,6 +235,31 @@ public class MessagingModule
                     + "configuration is missing.", getRole());
         }
         return dsConfig;
+    }
+
+    private List<DatastoreConfig> getDatastores() throws ModuleInitializationException {
+        Map<String, List<String>> mdMap = new HashMap<String, List<String>>();
+        for (MessageType type : MessageType.values()) {
+            mdMap.put(type.toString(), new ArrayList<String>());
+        }
+        Iterator<String> parameters = parameterNames();
+        List<DatastoreConfig> results = new ArrayList<DatastoreConfig>();
+        String param;
+        while (parameters.hasNext()) {
+            param = parameters.next();
+            if (param.startsWith("datastore")) {
+                DatastoreConfig dsConfig = getDatastore(param);
+                String[] msgTypes =
+                        dsConfig.getParameter("messageTypes").split(" ");
+                for (String msgType : msgTypes) {
+                    if (!mdMap.containsKey(msgType)) {
+                        throw new ModuleInitializationException(msgType
+                                + " is not a supported MessageType.", getRole());
+                    }
+                }
+            }
+        }
+        return results;
     }
 
     // Check to see if messaging is enabled
