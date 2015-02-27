@@ -25,6 +25,7 @@ import java.io.ByteArrayInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
@@ -62,6 +63,7 @@ import org.apache.http.client.methods.HttpHead;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpPut;
 import org.apache.http.client.methods.HttpRequestBase;
+import org.apache.http.entity.ByteArrayEntity;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.entity.mime.MultipartEntity;
 import org.apache.http.entity.mime.content.AbstractContentBody;
@@ -377,6 +379,19 @@ public class TestRESTAPI
         }
         return entity;
     }
+    protected static ByteArrayEntity getBytesEntity(
+            byte[] content, String contentType) {
+            if (content == null) {
+                return null;
+            }
+            
+            ByteArrayEntity entity =
+                new ByteArrayEntity(content);
+            if (contentType != null) {
+                entity.setContentType(contentType);
+            }
+            return entity;
+        }
     
     protected void verifyPOSTStatusOnly(URI url, int expected,
         StringEntity content, boolean authenticate) throws Exception {
@@ -1337,6 +1352,32 @@ public class TestRESTAPI
         verifyDELETEStatusOnly(url, SC_OK, true);
     }
 
+    @Test
+    public void testAtomZipRoundTrip() throws Exception {
+        String format = "info:fedora/fedora-system:ATOMZip-1.1";
+        String pid = "demo:TEST_ATOM_ZIP_RT";
+        URI obj = getURI("/objects/" + pid);
+        verifyPOSTStatusOnly(obj, SC_CREATED, getStringEntity("", TEXT_XML), true);
+        URI url = getURI(
+            String.format("/objects/%s/export?context=archive&format=%s",
+                pid,format));
+        byte[] src = verifyGETStatusBytes(
+                    url, SC_OK, true, true);
+        verifyDELETEStatusOnly(obj, SC_OK, true);
+        FileWriter fw = new FileWriter("/tmp/demo.demo:TEST_ATOM_ZIP_RT.zip", false);
+        for (byte b: src) fw.write(b);
+        fw.close();
+        url = getURI(String.format("/objects/%s?format=%s",pid,format));
+        ByteArrayEntity entity = getBytesEntity(src, "application/zip");
+        HttpPost post = new HttpPost(url);
+        HttpResponse response = putOrPost(post, entity, true);
+
+        String responseBody = readString(response);
+        assertEquals(SC_CREATED, response.getStatusLine().getStatusCode());
+        
+        assertFalse(DEMO_REST_PID.toString() + " round tripped with same PID",
+                DEMO_REST_PID.toString().equals(responseBody));
+    }
     @Test
     public void testAddDatastream() throws Exception {
         // inline (X) datastream
